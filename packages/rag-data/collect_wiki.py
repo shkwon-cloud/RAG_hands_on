@@ -2,11 +2,26 @@ import os
 import wikipediaapi
 import json
 import argparse
+import time
 
 wiki = wikipediaapi.Wikipedia(
     language='ko',
     user_agent='rag-data-bot/0.1 (for research purposes only;)'
 )
+
+REQUEST_DELAY = 0.5   # 요청 간 딜레이 (초)
+MAX_RETRIES = 3       # 최대 재시도 횟수
+
+def _safe_get_text(page, retries=MAX_RETRIES):
+    """Wikipedia 페이지 텍스트를 안전하게 가져오기 (재시도 포함)"""
+    for attempt in range(retries):
+        try:
+            return page.text
+        except Exception as e:
+            print(f"  ⚠ '{page.title}' 텍스트 가져오기 실패 (시도 {attempt+1}/{retries}): {e}")
+            time.sleep(2 ** attempt)  # 지수 백오프: 1초, 2초, 4초
+    print(f"  ❌ '{page.title}' 건너뜀 (재시도 모두 실패)")
+    return ""
 
 def get_pages_in_category(cat_title: str, max_depth=2):
     category = wiki.page(cat_title)
@@ -23,11 +38,14 @@ def get_pages_in_category(cat_title: str, max_depth=2):
             if member.ns == wikipediaapi.Namespace.CATEGORY:
                 recurse(member, depth + 1)
             elif member.ns == wikipediaapi.Namespace.MAIN:
-                if member.title not in visited_titles and len(member.text) > 500:
-                    visited_titles.add(member.title)
-                    results.append(member)
-                    if len(results) % 10 == 0:
-                        print(f"len(results): {len(results)}")
+                if member.title not in visited_titles:
+                    text = _safe_get_text(member)
+                    if len(text) > 500:
+                        visited_titles.add(member.title)
+                        results.append(member)
+                        if len(results) % 10 == 0:
+                            print(f"len(results): {len(results)}")
+                    time.sleep(REQUEST_DELAY)  # Rate limiting 방지
 
     recurse(category, 0)
     print(f"final len(results): {len(results)}")

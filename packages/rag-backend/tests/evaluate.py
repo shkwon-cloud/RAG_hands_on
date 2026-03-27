@@ -219,10 +219,14 @@ def eval_rag_records(rows: List[Dict[str, Any]], base_url: str, k: Optional[int]
         import requests as _r
         sess = _r.Session()
 
+    total_items = len([r for r in rows if "query" in r])
+    counter = 0
     for item in rows:
         if "query" not in item:
             continue
+        counter += 1
         q = item["query"]
+        print(f"📝 [{counter}/{total_items}] Evaluating: {q[:50]}...")
         expected_ids = item.get("expected_doc_ids", [])
         expected_points = item.get("expected_points", [])
         negatives = item.get("negative_cases", [])
@@ -364,9 +368,13 @@ def eval_mcq_records(rows: List[Dict[str, Any]], base_url: str, k: Optional[int]
     latencies_ms = []
     failures = []
 
+    total_items = len([r for r in rows if {"question","choices","answer"} <= r.keys()])
+    counter = 0
     for q in rows:
         if not {"question","choices","answer"} <= q.keys():
             continue
+        counter += 1
+        print(f"📝 [{counter}/{total_items}] Evaluating: {q['question'][:50]}...")
         prompt = build_prompt_mcq(q)
         try:
             t0 = time.perf_counter()
@@ -447,8 +455,9 @@ def main():
         result = eval_rag_records(rows, base_url=args.base_url, k=args.k, dry_run=args.dry_run,
                                   retrieval_source=args.retrieval_source, verbose=args.verbose)
     elapsed = time.time() - t0
-    print("# Evaluation Summary")
+    print("\n# Evaluation Summary")
     print(json.dumps({"mode": mode, "result": result, "elapsed_s": round(elapsed,2)}, ensure_ascii=False, indent=2))
+    print("\n✅ Evaluation completed!")
 
 if __name__ == "__main__":
     main()
